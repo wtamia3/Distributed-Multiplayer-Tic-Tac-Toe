@@ -1,92 +1,123 @@
+# controller.py
+
 import socket
 import threading
-from config import CONTROLLER_HOST, CONTROLLER_PORT, BROKER_HOST, BROKER_PORT
-import queue
+from multiprocessing import Process, Queue
+from worker import worker_loop
+from utils import format_board
 
-task_queue = queue.Queue()
-result_queue = queue.Queue()
+HOST = "127.0.0.1"
+PORT = 5555
 
 clients = []
+symbols = ["X", "O"]
 board = [" "] * 9
 turn = "X"
-lock = threading.Lock()
 
-def listen_to_broker():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((BROKER_HOST, BROKER_PORT))
-    print("[CONTROLLER] Connected to BROKER")
+# REAL shared multiprocessing queues
+task_queue = Queue()
+result_queue = Queue()
 
-    while True:
-        # Receive via broker
-        result = s.recv(1024).decode()
-        valid, new_board, winner = result.split("|")
-        valid = valid == "True"
-        new_board = new_board.split(",")
-        result_queue.put((valid, new_board, winner))
-        
+# Sync lock to prevent race conditions
+turn_lock = threading.Lock()
+
+
+def safe_send(conn, msg):
+    try:
+        conn.sendall(msg.encode())
+        return True
+    except Exception as e:
+        print("[SEND ERROR]", e)
+        return False
+
+
+def broadcast(msg):
+    dead = []
+    for c in clients:
+        if not safe_send(c, msg):
+            dead.append(c)
+
+    for c in dead:
+        clients.remove(c)
+
+
+def wrap_handler(conn, symbol):
+    """Show all exceptions instead of silently exiting"""
+    try:
+        handle_client(conn, symbol)
+    except Exception as e:
+        print(f"[THREAD ERROR] Player {symbol} crashed:", e)
+
+
 def handle_client(conn, symbol):
-    global turn, board
+    global board, turn
 
-    conn.sendall(f"Welcome Player {symbol}!\n".encode())
+    safe_send(conn, f"Welcome Player {symbol}!\n")
 
     while True:
-        if turn == symbol:
-            conn.sendall("Your move (0-8): ".encode())
-            move = conn.recv(1024).decode().strip()
+        with turn_lock:
 
-            if not move.isdigit() or int(move) not in range(9):
-                conn.sendall("Invalid input.\n".encode())
+            if turn != symbol:
                 continue
 
-            with lock:
-                # Send job to broker
-                task_queue.put((symbol, int(move), board))
+            safe_send(conn, "Your move (0-8): ")
 
-                valid, new_board, winner = result_queue.get()
-                if valid:
-                    board = new_board
-                    broadcast_board()
-                    if winner:
-                        broadcast(f"Game over! Winner: {winner}\n")
-                        return
-                    turn = "O" if turn == "X" else "X"
-                else:
-                    conn.sendall("Invalid move.\n".encode())
+            try:
+                data = conn.recv(1024)
+            except Exception as e:
+                print(f"[RECV ERROR] Player {symbol}:", e)
+                return
 
-def broadcast(message):
-    for c in clients:
-        try:
-            c.sendall(message.encode())
-        except:
-            pass
+            if not data:
+                print(f"[DISCONNECT] Player {symbol} closed connection")
+                return
 
-def broadcast_board():
-    text = (
-        "\nBoard:\n" +
-        f"{board[0]} | {board[1]} | {board[2]}\n" +
-        "---------\n" +
-        f"{board[3]} | {board[4]} | {board[5]}\n" +
-        "---------\n" +
-        f"{board[6]} | {board[7]} | {board[8]}\n\n"
-    )
-    broadcast(text)
+            move = data.decode().strip()
 
-def start_controller():
-    broker_thread = threading.Thread(target=listen_to_broker)
-    broker_thread.start()
+            if not move.isdigit() or int(move) not in range(9):
+                safe_send(conn, "Invalid input.\n")
+                continue
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind((CONTROLLER_HOST, CONTROLLER_PORT))
-    s.listen(2)
-    print(f"[CONTROLLER] Running on {CONTROLLER_HOST}:{CONTROLLER_PORT}")
+            move = int(move)
 
-    symbols = ["X", "O"]
+            # Send to worker
+            task_queue.put((symbol, move, board))
+            valid, new_board, winner = result_queue.get()
 
-    for symbol in symbols:
-        conn, addr = s.accept()
+            if not valid:
+                safe_send(conn, "Invalid move.\n")
+                continue
+
+            board[:] = new_board
+
+            broadcast(f"Board:\n{format_board(board)}\n")
+
+            if winner:
+                broadcast(f"GAME OVER — {winner} wins!\n")
+                return
+
+            turn = "O" if turn == "X" else "X"
+
+
+def start_server():
+    # spawn worker process
+    worker = Process(target=worker_loop, args=(task_queue, result_queue))
+    worker.start()
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((HOST, PORT))
+    server.listen(2)
+    print("\nServer running on port 5555...\n")
+
+    while len(clients) < 2:
+        conn, addr = server.accept()
+        symbol = symbols[len(clients)]
+        print(f"Player {symbol} connected from {addr}")
+
         clients.append(conn)
-        print(f"[CLIENT CONNECTED] {symbol} from {addr}")
-        threading.Thread(target=handle_client, args=(conn, symbol)).start()
+        thread = threading.Thread(target=wrap_handler, args=(conn, symbol))
+        thread.start()
+
 
 if __name__ == "__main__":
-    start_controller()
+    start_server()

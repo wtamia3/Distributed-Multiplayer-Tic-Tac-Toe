@@ -1,22 +1,30 @@
+# client.py
+
 import socket
-import sys
-from config import CONTROLLER_HOST, CONTROLLER_PORT
+
+HOST = "127.0.0.1"
+PORT = 5555
 
 def start_client():
-    host = CONTROLLER_HOST
+    c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    c.connect((HOST, PORT))
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((host, CONTROLLER_PORT))
-    print("Connected to controller.\n")
+    try:
+        while True:
+            msg = c.recv(2048)
+            if not msg:
+                break
+            msg = msg.decode()
+            print(msg, end="")
+            if "Your move" in msg:
+                move = input("> ")
+                c.sendall(move.encode())
+    except:
+        pass
+    finally:
+        print("\nClient closed.")
+        c.close()
 
-    while True:
-        msg = s.recv(1024).decode()
-        if not msg:
-            break
-        print(msg, end="")
-        if "Your move" in msg:
-            move = input("> ")
-            s.sendall(move.encode())
 
 if __name__ == "__main__":
     start_client()
