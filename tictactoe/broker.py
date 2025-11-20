@@ -7,6 +7,7 @@ controller_conn = None
 workers = []
 task_queue = Queue()
 lock = threading.Lock()
+print(f"[BROKER] Binding to {BROKER_HOST}:{BROKER_PORT}")
 
 def handle_worker(conn, addr):
     print(f"[WORKER CONNECTED] {addr}")
