@@ -1,8 +1,7 @@
 # config.py
 
-# Host settings
-BROKER_HOST = "10.3.6.178"
-CONTROLLER_HOST = "10.3.6.178"
+# IP of the machine running Broker + Controller
+HOST = "172.20.208.19"
 
 # Ports
 BROKER_PORT = 6000
