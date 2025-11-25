@@ -16,31 +16,6 @@ This project is a distributed multiplayer Tic-Tac-Toe game built using Python an
 2. Run the following command to start the game server (controller):
    ```bash
    python controller.py
-### Step 2: Run Player     You're absolutely right! Step 2 and Step 3 should be included in the `README.md` to make it complete and clear. Here's the revised version of the `README.md` with the missing steps:
-
----
-
-### **Revised `README.md`**
-
-````markdown
-# Distributed Multiplayer Tic-Tac-Toe
-
-This project is a distributed multiplayer Tic-Tac-Toe game built using Python and socket programming. It allows two players to play Tic-Tac-Toe over the network, where one machine acts as the controller and both players act as clients.
-
-## Project Structure
-
-- `controller.py`: The server that manages the game state and handles communication with the clients.
-- `client.py`: The client code that connects to the controller and allows players to make their moves.
-- `worker.py`: A separate process responsible for validating player moves (optional depending on how you set up).
-- `README.md`: This file that explains the project.
-
-## How to Run the Game
-
-### Step 1: Start the Controller
-1. Open a terminal in the project directory.
-2. Run the following command to start the game server (controller):
-   ```bash
-   python controller.py
 ````
 
 The controller will start and wait for clients to connect.
@@ -77,12 +52,10 @@ The controller will start and wait for clients to connect.
 
 ## Notes
 
-* This game works locally on a single machine for testing purposes, with both players running on the same computer in separate terminal windows.
+* This game works locally on a single machine and multiple machines with both players running on the same computer in separate terminal windows.
 
 ## Future Enhancements
 
 * Add the ability to play over the internet (by using public IPs and appropriate port forwarding).
 * Introduce a better UI (e.g., web-based or with a graphical user interface).
 
-
-This should now provide a complete guide for anyone wanting to run the game, whether on the same machine or across different terminals. Let me know if you have any more questions or need further clarification!
